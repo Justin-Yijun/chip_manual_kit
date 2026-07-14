@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# MinerU 中间产物与模型缓存
+out/
+out_*/
+*_middle.json
+*_model.json
+*_layout.pdf
+*_span.pdf
+*_origin.pdf
+install_*.log
+models_download.log
+poc_*.log
+run_*.log
+seq_run.log
+
+# 手册派生产物（视手册版权决定是否提交，默认全部忽略）
+# 如需随包发布脱敏示例，请手动 git add -f 对应文件
+data/knowledge.json
+data/images/
+data/markdown/
+data/vectors/
+skill/chip-manual-kit/knowledge.json
+
+# 本地真实评测问题可能包含手册/项目名称，不提交公开仓库
+eval/questions.local.jsonl
+
+# 本地嵌入模型缓存
+models/
+
+# 原始/派生 PDF
+*.pdf

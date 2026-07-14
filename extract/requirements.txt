@@ -1,0 +1,21 @@
+# 抽取管线依赖
+# 首选：MinerU（PDF → markdown/JSON，含公式 LaTeX / 表格 / 阅读序 / 图）
+#   CPU 环境：uv pip install -U "mineru[core]"，并用 -b pipeline 运行
+#   国内/受限网络：设 MINERU_MODEL_SOURCE=modelscope 下载模型
+mineru[core]>=2.0
+beautifulsoup4>=4.13   # mineru_to_kb.py 解析 MinerU 的 HTML 表格
+
+# 备选：旧版纯表格抽取（extract/pdf_to_json.py，仅寄存器/位域，无公式）
+pdfplumber>=0.11
+
+# 混合检索：dense 向量（extract/vectorize.py + server 的 search_prose）
+# 离线可用；模型经 ModelScope 下载到本地目录后用 CHIP_EMBED_MODEL 指向即可
+sentence-transformers>=3.0
+# 默认嵌入模型：BAAI/bge-small-en-v1.5（英文、~130MB、CPU 友好）
+#
+# 说明：
+# - BM25 词法检索为纯标准库实现（server/retrieval.py），无需额外依赖，离线可复现。
+# - RRF 融合无需依赖。
+# - 可选 cross-encoder 精排：设 CHIP_RERANK_MODEL 指向本地 bge-reranker-base（~1.1GB），
+#   同样由 sentence-transformers(CrossEncoder) 加载；不设则自动跳过重排（仅 RRF）。
+#   modelscope download BAAI/bge-reranker-base

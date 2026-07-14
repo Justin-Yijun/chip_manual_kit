@@ -1,0 +1,13 @@
+[
+  {"type":"text","text":"1 ACME Peripheral","text_level":1,"page_idx":0},
+  {"type":"text","text":"The ACME block receives jobs and applies the selected mode.","page_idx":0},
+  {"type":"image","image_caption":["Figure 1-1 ACME Block Diagram"],"img_path":"images/acme.png","page_idx":0},
+  {"type":"table","table_body":"<table><tr><th>Register Name</th><th>Offset</th></tr><tr><td>ACME_CTRL</td><td>0x100</td></tr></table>","page_idx":1},
+  {"type":"text","text":"1.1 ACME_CTRL","text_level":2,"page_idx":1},
+  {"type":"text","text":"ACME control and status register.","page_idx":1},
+  {"type":"table","table_body":"<table><tr><th>Bits</th><th>Field</th><th>Type</th><th>Default</th><th>Meaning</th></tr><tr><td>[0]</td><td>ENABLE</td><td>R/W</td><td>0</td><td>Enable the block.</td></tr></table>","page_idx":1},
+  {"type":"text","text":"1.2 ACME_MODE_ENUM","text_level":2,"page_idx":2},
+  {"type":"table","table_body":"<table><tr><th>Encoding</th><th>Symbol</th><th>Meaning</th></tr><tr><td>0</td><td>ACME_MODE_IDLE</td><td>Idle mode.</td></tr><tr><td>1</td><td>ACME_MODE_RUN</td><td>Run mode.</td></tr></table>","page_idx":2},
+  {"type":"equation","text":"$$ y = ax + b $$","page_idx":3},
+  {"type":"code","sub_type":"pseudo","code_caption":["Mode selection"],"code_body":"if ENABLE then MODE = RUN","page_idx":3}
+]

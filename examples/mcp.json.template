@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "chip-manual-kit": {
+      "command": "/ABS/PATH/TO/.venv/Scripts/python.exe",
+      "args": ["/ABS/PATH/TO/chip-manual-kit/server/chip_server.py"],
+      "env": {
+        "CHIP_KB_PATH": "/ABS/PATH/TO/chip-manual-kit/data/knowledge.json",
+        "CHIP_VECTORS_PATH": "/ABS/PATH/TO/chip-manual-kit/data/vectors",
+        "CHIP_EMBED_MODEL": "/ABS/PATH/TO/models/bge-small-en-v1.5",
+        "CHIP_RERANK_MODEL": "/ABS/PATH/TO/models/bge-reranker-base",
+        "HF_HUB_OFFLINE": "1",
+        "TRANSFORMERS_OFFLINE": "1"
+      }
+    }
+  }
+}

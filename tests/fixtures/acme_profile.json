@@ -1,0 +1,16 @@
+{
+  "register_name_pattern": "^(?:ACME_[A-Z0-9_]+|STATUS)$",
+  "register_require_underscore": false,
+  "bit_position_patterns": ["^\\[\\d+(?::\\d+)?\\]$"],
+  "enum_suffixes": ["_E", "_ENUM"],
+  "table_header_aliases": {
+    "bit_position": ["bits"],
+    "field_name": ["field"],
+    "address": ["offset"],
+    "mnemonic": ["symbol"],
+    "value": ["encoding"],
+    "access": ["type"],
+    "reset": ["default"],
+    "description": ["meaning"]
+  }
+}

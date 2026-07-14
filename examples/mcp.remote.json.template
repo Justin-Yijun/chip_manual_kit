@@ -1,0 +1,8 @@
+{
+  "_comment": "形态 B：连接【已部署在服务器上的常驻 HTTP MCP】。服务端用 `chip_server.py --http` 启动（streamable-http，端点默认 /mcp）。客户端本地零依赖，只需能访问该 URL。",
+  "mcpServers": {
+    "chip-manual-kit": {
+      "url": "http://SERVER_HOST:8000/mcp"
+    }
+  }
+}

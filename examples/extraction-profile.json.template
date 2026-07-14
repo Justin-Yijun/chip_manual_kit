@@ -1,0 +1,26 @@
+{
+  "_comment": "复制为自己的 profile.json，仅保留/修改需要适配的项。别名会追加到默认值，不会删除默认兼容性。",
+  "register_name_pattern": "^[A-Z][A-Z0-9_]*(?:\\[[0-9:.-]+\\])?$",
+  "register_require_underscore": false,
+  "bit_position_patterns": [
+    "^\\[\\d+(?::\\d+)?\\]$",
+    "^\\d+(?::\\d+)?$"
+  ],
+  "enum_suffixes": ["_E", "_S", "_ENUM", "_TypeDef"],
+  "noise_substrings": [
+    "your company confidential",
+    "evaluation copy"
+  ],
+  "table_header_aliases": {
+    "bit_position": ["bits", "bit range", "bit(s)"],
+    "field_name": ["field", "bit name"],
+    "register": ["register name", "offset name"],
+    "address": ["offset", "absolute address"],
+    "mnemonic": ["symbol", "encoding name"],
+    "value": ["encoding", "field value"],
+    "access": ["type", "permission"],
+    "reset": ["default", "reset/default"],
+    "typical": ["typical"],
+    "description": ["meaning", "function"]
+  }
+}

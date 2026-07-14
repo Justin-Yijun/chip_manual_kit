@@ -1,0 +1,3 @@
+{"id":"module-reg-01","query":"what is the address and meaning of CONTROL_STATUS","keyword":"CONTROL_STATUS","module":"MODULE","type":"register","expected":{"register_name":"CONTROL_STATUS","bit_field":"ENABLE"},"source":"Manual chapter X, page Y; manually verified"}
+{"id":"module-prose-01","query":"how does receive backpressure work","module":"MODULE","type":"prose","expected":{"section_contains":"Receive Backpressure"},"source":"Manual section X.Y; manually verified"}
+{"id":"module-figure-01","query":"show the module architecture diagram","keyword":"block diagram","module":"MODULE","type":"figure","expected":{"caption_contains":"Block Diagram"},"source":"Manual Figure X-Y; manually verified"}

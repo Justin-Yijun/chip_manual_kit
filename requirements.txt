@@ -1,0 +1,2 @@
+# MCP server 运行依赖（server/chip_server.py）
+mcp>=1.0
