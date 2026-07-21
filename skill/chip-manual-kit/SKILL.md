@@ -65,8 +65,9 @@ python query_kb.py --data knowledge.json --mode concepts --query "sequence id" -
 MCP server（Windows `command` 指向 venv 的 `python.exe`），暴露三个互补工具：
 - `search_registers(query, module)` — 精确寄存器/位域/地址
 - `search_concepts(query, module)` — 关键词命中原理/公式/算法/枚举/表/图
-- `search_prose(query, module, top_k=5, rerank=True)` — 混合检索（BM25 + dense，RRF 融合，
-  可选 cross-encoder 精排）；融合/重排在服务端完成，默认只返回 top 5，避免上下文膨胀。
+- `search_prose(query, module, top_k=5, rerank=True)` — 混合检索（BM25 + dense，默认 RRF；
+  可设 `CHIP_FUSION=relative_score` 做 A/B；可选 cross-encoder 精排）。融合/重排在服务端完成，
+  **默认只返回 top 5**，避免上下文膨胀。
 
 ## 换手册 / 重建知识库（一键复现）
 
@@ -80,4 +81,6 @@ MCP server（Windows `command` 指向 venv 的 `python.exe`），暴露三个互
 
 ## 注意事项
 - 数据经 PUA/水印清洗；MinerU OCR 仍可能有个别误识（如 0↔O），关键地址/位宽建议回查原 PDF 页码(page)。
+- 默认用 MinerU 建主库；Docling 仅作校验对照（`compare_backends`），不以自动并集覆盖主库。详见仓库 `docs/USER_GUIDE.md`。
+- 手册增量/换版：替换对应模块的 MinerU 输出后整库重建 `knowledge.json` + vectors，并用旧库/Docling 做差分验收（同 USER_GUIDE §4）。
 - `knowledge.json` 为手册派生产物，是否入库取决于手册版权，默认建议 `.gitignore`。

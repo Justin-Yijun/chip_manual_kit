@@ -16,10 +16,11 @@
 用户问题提炼成关键词再调用工具，而不是把原句转发进去。因此 register/figure 类题目
 额外带 "keyword" 字段，模拟这一步提炼后的调用参数；"query" 仍保留原始自然语言，
 供人读、也供 prose 类题目直接使用（prose 走语义/词法混合检索，能吃自然语言）。
-                  bm25         : 只用 BM25（use_dense=False, rerank=False）
-                  hybrid_rrf   : BM25 + dense，RRF 融合（rerank=False）
-                  hybrid_rerank: 在 hybrid_rrf 基础上加 cross-encoder 重排（需配置
-                                 CHIP_RERANK_MODEL，否则该配置自动跳过并提示）
+                  bm25              : 只用 BM25（use_dense=False, rerank=False）
+                  hybrid_rrf        : BM25 + dense，RRF 融合（rerank=False）
+                  hybrid_relative   : BM25 + dense，relative_score 融合（rerank=False）
+                  hybrid_rerank     : 在 hybrid_rrf 基础上加 cross-encoder 重排（需配置
+                                      CHIP_RERANK_MODEL，否则该配置自动跳过并提示）
 
 expected 字段按 type 约定：
     register: {"register_name": "...", "bit_field": "..."(可选)}
@@ -158,13 +159,14 @@ def main(argv: list[str] | None = None) -> int:
     for qid, rank in fig_stats.details:
         print(f"  {qid}: rank={rank}")
 
-    # -- search_prose 算法对比：bm25 / hybrid_rrf / hybrid_rerank ------------------
+    # -- search_prose 算法对比：bm25 / hybrid_rrf / hybrid_relative / hybrid_rerank --
     prose_questions = [q for q in questions if q["type"] == "prose"]
     idx = HybridIndex(Path(args.vectors))
     configs = [
-        ("bm25", {"use_dense": False, "rerank": False}),
-        ("hybrid_rrf", {"use_dense": True, "rerank": False}),
-        ("hybrid_rerank", {"use_dense": True, "rerank": True}),
+        ("bm25", {"use_dense": False, "rerank": False, "fusion": "rrf"}),
+        ("hybrid_rrf", {"use_dense": True, "rerank": False, "fusion": "rrf"}),
+        ("hybrid_relative", {"use_dense": True, "rerank": False, "fusion": "relative_score"}),
+        ("hybrid_rerank", {"use_dense": True, "rerank": True, "fusion": "rrf"}),
     ]
 
     print(f"\n=== search_prose 算法对比（{len(prose_questions)} 条 prose 题，top_k={args.top_k}）===")

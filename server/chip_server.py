@@ -267,11 +267,14 @@ def search_concepts(query: str, module: str = "") -> dict[str, Any]:
 
 @mcp.tool()
 def search_prose(query: str, module: str = "", top_k: int = 5, rerank: bool = True) -> dict[str, Any]:
-    """混合检索芯片手册（BM25 词法 + dense 向量，RRF 融合，可选 cross-encoder 重排）。
+    """混合检索芯片手册（BM25 词法 + dense 向量，可选融合，可选 cross-encoder 重排）。
 
     适合"既含标识符又含概念"的自然语言查询（如 "how does DROP_CNT saturation work"）。
     融合与重排全在服务端完成，**默认只返回 top 5 条精炼结果**，避免把几十条粗召回塞进上下文、
     稀释注意力。与 search_registers（精确寄存器/位域）、search_concepts（关键词）互补。
+
+    融合策略由环境变量 CHIP_FUSION 控制：rrf（默认）或 relative_score；
+    relative_score 权重见 CHIP_FUSION_DENSE_WEIGHT / CHIP_FUSION_BM25_WEIGHT。
 
     Args:
         query: 自然语言查询（英文优先，手册为英文）。
@@ -281,8 +284,8 @@ def search_prose(query: str, module: str = "", top_k: int = 5, rerank: bool = Tr
 
     Returns:
         {query, module, count, results:[{module, kind, title, breadcrumb, page, section_id,
-        text, rrf_score, dense_score, bm25_score}], note}
-        note 标明实际用的方法（bm25 / rrf(bm25+dense) / +rerank）与降级情况。
+        text, fusion_score, rrf_score, dense_score, bm25_score}], note}
+        note 标明实际用的方法（bm25 / rrf(...) / relative_score(...) / +rerank）与降级情况。
     """
     results, err = _SEMANTIC.search(
         query, module, max(1, min(top_k, _MAX_RESULTS)), rerank=rerank)

@@ -6,9 +6,10 @@
 ## 0. 哪些是通用的，哪些需要适配
 
 通用层：
-- MinerU 的阅读序、标题、表格、图片、公式抽取；
+- MinerU 的阅读序、标题、表格、图片、公式抽取（默认后端）；
+- 可选 Docling 抽取后端（`extract/docling_to_kb.py`），产出同一 content_list 形状；
 - `knowledge.json` schema；
-- 结构感知分块、BM25 + dense + RRF、可选 rerank；
+- 结构感知分块、BM25 + dense + RRF（默认）/ relative_score（可选 A/B）、可选 rerank；
 - MCP stdio/HTTP、评测 hit@1/hit@5。
 
 厂商适配层：
@@ -141,9 +142,35 @@ python eval/run_eval.py \
 - register/figure：hit@5 ≥ 95%；
 - prose hybrid：hit@5 ≥ 85%；
 - 任何 safety/复位/地址关键题：必须 hit@1 或单独设硬门槛；
-- BM25、hybrid_rrf、hybrid_rerank 分开记录，避免换算法后悄悄回退。
+- BM25、hybrid_rrf、hybrid_relative、hybrid_rerank 分开记录，避免换算法后悄悄回退。
+- 融合 A/B：默认 `CHIP_FUSION=rrf`；对照可设 `CHIP_FUSION=relative_score`
+  （权重 `CHIP_FUSION_DENSE_WEIGHT` / `CHIP_FUSION_BM25_WEIGHT`，默认各 0.5）。
 
 题目少时结果只算 smoke test；每个模块至少 5 题、总量 30+ 才适合比较算法。
+
+## 6b. Docling 校验（默认仍是 MinerU）
+
+**准确度优先时的标准用法**：MinerU 建主库，Docling 只做对照，**不自动覆盖** `data/knowledge.json`。  
+完整说明（含手册增量/换版）见 **[`USER_GUIDE.md`](USER_GUIDE.md)**。
+
+同一 golden-slice（或整本）可再跑一遍 Docling：
+
+```bash
+pip install docling
+
+python extract/docling_to_kb.py --pdf golden-slice.pdf --module ACME \
+  --out-dir out_docling --output data/kb_docling.json \
+  --profile my-vendor-profile.json
+
+python extract/compare_backends.py \
+  --a data/knowledge.json --b data/kb_docling.json \
+  --label-a mineru --label-b docling --json compare-report.json
+```
+
+判定要点：`only_docling` 多 → 疑似 MinerU 漏挂（回原书后再改主库）；地址不一致 → 禁止静默采信任一侧；  
+位域 Jaccard 低 → 调 profile。新厂商落地仍走本章 §1–§6；**换手册版本 / 加模块**见 USER_GUIDE §4。
+
+不整库迁移到 LlamaIndex：只借鉴 relative_score 融合，检索与 MCP 仍用本仓库实现。
 
 ## 7. 全量扩展与回归
 

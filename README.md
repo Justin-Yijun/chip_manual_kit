@@ -7,17 +7,17 @@
 
 ```mermaid
 flowchart LR
-  pdf[芯片手册 PDF] --> mineru["MinerU (CPU pipeline)"]
-  mineru --> cl["*_content_list.json (公式=LaTeX / 表格 HTML / 阅读序 / 图)"]
+  pdf[芯片手册 PDF] --> mineru["MinerU (默认)"]
+  pdf --> docling["Docling (可选对照)"]
+  mineru --> cl["*_content_list.json"]
+  docling --> cl
   cl --> kb["extract/mineru_to_kb.py"]
-  kb --> know["data/knowledge.json (registers + sections + enums + formulas + algorithms + figures)"]
-  know --> vec["extract/vectorize.py (结构感知分块 + dense 向量)"]
-  vec --> vidx["data/vectors/ (chunks + embeddings + meta)"]
+  kb --> know["data/knowledge.json"]
+  know --> vec["extract/vectorize.py"]
+  vec --> vidx["data/vectors/"]
   know --> srv["server/chip_server.py (MCP)"]
   vidx --> srv
   srv --> agent[AI Agent]
-  know --> cli["skill/query_kb.py (CLI 兜底)"]
-  cli --> agent
 ```
 
 一键复现（工具无关，Cursor / VS Code / Claude Code 均可调用同一入口）：
@@ -28,11 +28,17 @@ python scripts/build_kb.py --mineru-out OUT_DIR1 OUT_DIR2 ... --embed-model /pat
 # 或用薄封装：scripts/build.ps1（Windows）/ scripts/build.sh（Linux/macOS）
 ```
 
+可选对照：`extract/docling_to_kb.py` + `extract/compare_backends.py`。  
+**用户指南（MinerU 默认 + Docling 校验、手册增量/换版）**：[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)。  
+厂商 golden-slice 适配：[`docs/ADAPTING_AND_TESTING.md`](docs/ADAPTING_AND_TESTING.md)。  
+检索融合默认 RRF；A/B 可设 `CHIP_FUSION=relative_score`。
 ## 目录
 
 | 路径 | 作用 |
 |---|---|
 | `extract/mineru_to_kb.py` | MinerU 输出 → `knowledge.json`（推荐，含公式/枚举/算法/图） |
+| `extract/docling_to_kb.py` | 可选 Docling → 同形 content_list / knowledge.json（对照用） |
+| `extract/compare_backends.py` | 对比两条后端的寄存器/地址/位域重叠 |
 | `extract/pdf_to_json.py` | 旧版 pdfplumber 抽取（仅寄存器/位域，无公式，作对照/降级） |
 | `server/chip_server.py` | FastMCP server，工具 `search_registers` / `search_concepts` |
 | `skill/chip-manual-kit/` | 可移植 Agent Skill（`SKILL.md` + `query_kb.py` CLI 兜底） |
@@ -40,6 +46,7 @@ python scripts/build_kb.py --mineru-out OUT_DIR1 OUT_DIR2 ... --embed-model /pat
 | `examples/mcp.json.template` | MCP 客户端配置模板 |
 | `eval/` | 检索评测：`questions.jsonl` + `run_eval.py`，量化 hit@1/hit@5（见 `eval/README.md`） |
 | `extract/audit_source.py` / `validate_kb.py` | 新厂商源格式审计 + 生成知识库结构/覆盖率验证 |
+| `docs/USER_GUIDE.md` | 用户指南：MinerU 默认构建、Docling 校验、手册增量/换版 |
 | `docs/ADAPTING_AND_TESTING.md` | 换厂商手册的 golden-slice 适配与四层测试方法 |
 
 ## 知识库 schema

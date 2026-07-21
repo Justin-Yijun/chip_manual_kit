@@ -5,6 +5,11 @@
 mineru[core]>=2.0
 beautifulsoup4>=4.13   # mineru_to_kb.py 解析 MinerU 的 HTML 表格
 
+# 可选对照后端：Docling（不替换 MinerU；见 extract/docling_to_kb.py）
+#   pip install docling
+#   用 compare_backends.py 与 MinerU 产出对比后再决定是否采用
+# docling>=2.0
+
 # 备选：旧版纯表格抽取（extract/pdf_to_json.py，仅寄存器/位域，无公式）
 pdfplumber>=0.11
 

@@ -36,7 +36,10 @@ python eval/run_eval.py \
 - `search_registers` / `search_concepts` 基线；
 - BM25-only；
 - BM25 + dense 的 RRF；
+- BM25 + dense 的 relative_score（LlamaIndex 风格对照）；
 - 可选 cross-encoder rerank。
+
+服务端默认融合仍是 RRF。对照时可设 `CHIP_FUSION=relative_score`。
 
 建议每个模块至少 5 题、总量 30+；少量问题只能作为 smoke test。题集和跑分结果可能泄露
 手册/项目特征，应保存在本地或受控内部仓库，不应提交到公开仓库。

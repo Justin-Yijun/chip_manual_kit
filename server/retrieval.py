@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""混合检索：BM25 词法 + dense 向量，RRF 融合，可选 cross-encoder 重排。
+"""混合检索：BM25 词法 + dense 向量，可选融合策略，可选 cross-encoder 重排。
 
 设计要点（针对「返回给 agent 的上下文要少而精」）：
     * 每路（BM25 / dense）各取 candidate_pool（默认 30）。
-    * Reciprocal Rank Fusion（RRF, k=60）把两路排名融合成一个候选序。
+    * 默认 Reciprocal Rank Fusion（RRF, k=60）把两路排名融合成一个候选序。
+    * 可选 relative_score：按各路相对最高分归一后加权求和（LlamaIndex 风格 A/B）。
     * 可选：用本地 CPU 的 cross-encoder（bge-reranker-base）对候选精排。
     * **只返回 top_k（默认 5）**，融合/重排全在服务端完成，不把几十条粗召回塞回上下文。
 
+环境变量：
+    CHIP_FUSION=rrf|relative_score     默认 rrf
+    CHIP_FUSION_DENSE_WEIGHT=0.5       relative_score 时 dense 权重
+    CHIP_FUSION_BM25_WEIGHT=0.5        relative_score 时 BM25 权重
+
 全部惰性加载并优雅降级：
     * 缺 numpy/sentence-transformers 或缺 embeddings → 退化为纯 BM25。
-    * 缺 reranker 模型 → 跳过重排，用 RRF 结果。
+    * 缺 reranker 模型 → 跳过重排，用融合结果。
     * 连 chunks.json 都没有 → 返回空并在 note 说明。
 
 依赖：BM25 为纯标准库实现（离线、可复现）；dense 用 sentence-transformers；
@@ -219,17 +225,66 @@ class HybridIndex:
                 fused[idx] = fused.get(idx, 0.0) + 1.0 / (_RRF_K + rank + 1)
         return fused
 
-    def search(self, query: str, module: str, top_k: int, pool: int = _DEFAULT_POOL,
-               rerank: bool = True, use_dense: bool = True) -> tuple[list[dict[str, Any]], str]:
-        """use_dense=False 时强制只用 BM25（供评测对比 A/B，不需要另建索引）。"""
+    @staticmethod
+    def _relative_score(
+        *rankings: list[tuple[int, float]],
+        weights: list[float] | None = None,
+    ) -> dict[int, float]:
+        """各路分数除以该路最高分后加权求和（LlamaIndex RelativeScoreFusion 风格）。"""
+        active = [(r, w) for r, w in zip(rankings, weights or []) if r]
+        if weights is None:
+            n = sum(1 for r in rankings if r)
+            w_each = (1.0 / n) if n else 1.0
+            active = [(r, w_each) for r in rankings if r]
+        fused: dict[int, float] = {}
+        for ranking, weight in active:
+            max_s = max(s for _, s in ranking)
+            if max_s <= 0:
+                continue
+            for idx, score in ranking:
+                fused[idx] = fused.get(idx, 0.0) + weight * (score / max_s)
+        return fused
+
+    @staticmethod
+    def _resolve_fusion(fusion: str | None) -> str:
+        name = (fusion or os.environ.get("CHIP_FUSION") or "rrf").strip().lower()
+        if name in ("relative", "relative_score", "rel"):
+            return "relative_score"
+        return "rrf"
+
+    def search(
+        self,
+        query: str,
+        module: str,
+        top_k: int,
+        pool: int = _DEFAULT_POOL,
+        rerank: bool = True,
+        use_dense: bool = True,
+        fusion: str | None = None,
+    ) -> tuple[list[dict[str, Any]], str]:
+        """use_dense=False 时强制只用 BM25（供评测对比 A/B，不需要另建索引）。
+
+        fusion: rrf（默认）| relative_score；None 时读 CHIP_FUSION。
+        """
         self._load()
         if not self._chunks:
             return [], self._note
         module_lc = module.strip().lower()
+        fusion_mode = self._resolve_fusion(fusion)
 
         dense = self._dense_top(query, pool) if use_dense else []
         lexical = self._bm25_top(query, pool)
-        fused = self._rrf(dense, lexical)
+        if fusion_mode == "relative_score" and dense and lexical:
+            try:
+                w_dense = float(os.environ.get("CHIP_FUSION_DENSE_WEIGHT", "0.5"))
+                w_bm25 = float(os.environ.get("CHIP_FUSION_BM25_WEIGHT", "0.5"))
+            except ValueError:
+                w_dense, w_bm25 = 0.5, 0.5
+            fused = self._relative_score(dense, lexical, weights=[w_dense, w_bm25])
+            fuse_tag = "relative_score(bm25+dense)"
+        else:
+            fused = self._rrf(dense, lexical)
+            fuse_tag = "rrf(bm25+dense)"
         if not fused:
             return [], self._note or "无匹配结果。"
 
@@ -249,7 +304,7 @@ class HybridIndex:
         if not cand:
             return [], "该模块下无匹配结果，可去掉 module 再试。"
 
-        method = "rrf(bm25+dense)" if (self._dense_ok and use_dense) else "bm25"
+        method = fuse_tag if (self._dense_ok and use_dense and dense) else "bm25"
         reranker = self._ensure_reranker() if rerank else None
         if reranker is not None and len(cand) > 1:
             pairs = [(query, self._chunks[i].get("text", "")) for i, _ in cand]
@@ -257,7 +312,7 @@ class HybridIndex:
                 rr = reranker.predict(pairs)
                 cand = [c for c, _ in sorted(zip(cand, rr), key=lambda x: x[1], reverse=True)]
                 method += "+rerank"
-            except Exception:  # noqa: BLE001 - 重排失败则保留 RRF 顺序
+            except Exception:  # noqa: BLE001 - 重排失败则保留融合顺序
                 pass
 
         results: list[dict[str, Any]] = []
@@ -271,7 +326,8 @@ class HybridIndex:
                 "page": ch.get("page"),
                 "section_id": ch.get("section_id", ""),
                 "text": ch.get("text", ""),
-                "rrf_score": round(fscore, 5),
+                "fusion_score": round(fscore, 5),
+                "rrf_score": round(fscore, 5),  # 兼容旧字段名
                 "dense_score": round(dense_score.get(idx, 0.0), 4),
                 "bm25_score": round(bm25_score.get(idx, 0.0), 4),
             })

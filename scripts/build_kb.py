@@ -47,7 +47,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = argparse.ArgumentParser(description="一键构建 knowledge.json + 混合检索索引。")
     p.add_argument("--mineru-out", nargs="+", required=True,
-                   help="MinerU 输出目录或 *_content_list.json（可多个）")
+                   help="MinerU/Docling 产出的目录或 *_content_list.json（可多个）")
     p.add_argument("--data-dir", default=str(ROOT / "data"),
                    help="输出目录（默认 data/），产出 knowledge.json 与 vectors/")
     p.add_argument("--embed-model", default=os.environ.get("CHIP_EMBED_MODEL", "BAAI/bge-small-en-v1.5"),
@@ -62,7 +62,7 @@ def main(argv: list[str] | None = None) -> int:
     vectors_dir = data_dir / "vectors"
 
     import mineru_to_kb
-    print("== [1/2] MinerU 输出 → knowledge.json ==")
+    print("== [1/2] content_list → knowledge.json ==")
     extract_args = ["--input", *args.mineru_out, "--output", str(kb_json)]
     if args.profile:
         extract_args.extend(["--profile", args.profile])
