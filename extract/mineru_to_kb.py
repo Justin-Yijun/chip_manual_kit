@@ -70,6 +70,12 @@ _BIT_POSITION_PATTERNS: list[re.Pattern[str]] = [
 # 十六进制地址
 _RE_HEX = re.compile(r"0x[0-9A-Fa-f]+")
 
+# PDF 抽取常见粘连：说明文字与紧跟的寄存器名之间丢失空格，如
+# "...RegistersRFOE(0..6)_RX_APERT_SMEM_MIN"。合法寄存器名全大写、不含小写字母，
+# 因此在"小写字母→大写字母"处补切一刀总是安全的：不会切碎任何真正的寄存器名，
+# 只会切开"描述文字+紧跟着的寄存器名"这种粘连。
+_RE_LOWER_TO_UPPER_BOUNDARY = re.compile(r"(?<=[a-z])(?=[A-Z])")
+
 
 def _apply_profile(path: Path | None) -> None:
     """加载可选厂商适配 profile；未提供时保持当前行为完全不变。
@@ -182,11 +188,19 @@ def _table_rows(table_html: str) -> list[list[str]]:
 
 
 def _find_col(header: list[str], *keys: str) -> int:
-    """在表头里找首个包含任一关键字的列索引（大小写不敏感）。"""
+    """在表头里找列索引（大小写不敏感），按 keys 的优先顺序匹配。
+
+    先用第一个 key 扫一遍所有列，找到就返回；找不到才试下一个 key。
+    不能按"列顺序优先"扫（对每列判断是否命中任一 key）：比如
+    ["Register","BAR","Address","CSRType"] 这种表头，"address" 是真正的
+    地址列，但排序更靠后的"bar"列会在按列顺序扫描时被优先命中，
+    导致地址列被 BAR（Base Address Register 索引，不是地址）抢走。
+    """
     low = [h.lower() for h in header]
-    for idx, cell in enumerate(low):
-        if any(key in cell for key in keys):
-            return idx
+    for key in keys:
+        for idx, cell in enumerate(low):
+            if key in cell:
+                return idx
     return -1
 
 
@@ -295,11 +309,16 @@ def _extract_register_token(text: str) -> str:
 
     MinerU 里寄存器名常作为带章节号的标题出现，整串不匹配寄存器名正则，
     因此按 token 扫描，取首个形如寄存器名（含下划线、可含 (0..2) 实例范围）者。
+    若整个 token 不匹配，再尝试在"小写→大写"边界处二次拆分，兼容
+    "DescriptionRegisters" 与紧跟寄存器名之间丢失空格的粘连情况。
     """
     for tok in _normalize_ocr(text).split():
         tok = tok.strip(".,:；;")
         if _is_register_name(tok):
             return tok
+        for piece in _RE_LOWER_TO_UPPER_BOUNDARY.split(tok):
+            if _is_register_name(piece):
+                return piece
     return ""
 
 

@@ -78,17 +78,32 @@ def compare_kbs(a: dict[str, Any], b: dict[str, Any], label_a: str, label_b: str
     only_b = sorted(set_b - set_a)
 
     addr_agree = 0
-    addr_disagree: list[dict[str, str]] = []
+    addr_mismatch: list[dict[str, str]] = []  # 两侧都抽到地址，但值不同：真正值得回 PDF 核对
+    missing_a = missing_b = 0  # 某一侧地址为空：多半是该侧抽取器结构性漏了这张表，不代表另一侧错
     field_jaccard: list[float] = []
     for name in sorted(both):
         aa, bb = (ra[name].get("address") or "").lower(), (rb[name].get("address") or "").lower()
-        if aa and bb and aa == bb:
-            addr_agree += 1
-        elif aa or bb:
-            addr_disagree.append({"register": name, label_a: aa, label_b: bb})
+        if aa and bb:
+            if aa == bb:
+                addr_agree += 1
+            else:
+                addr_mismatch.append({"register": name, label_a: aa, label_b: bb})
+        else:
+            if not aa:
+                missing_a += 1
+            if not bb:
+                missing_b += 1
         fa, fb = _field_names(ra[name]), _field_names(rb[name])
         if fa or fb:
             field_jaccard.append(len(fa & fb) / len(fa | fb))
+
+    compared = len(both)
+    # 结构性缺失：同一侧几乎所有共享寄存器都没抽到地址（如汇总表未被识别为 summary），
+    # 与"两侧都抽到但值不同"是完全不同性质的问题，报告里要分开，避免人工把大量
+    # "抽取器整体没读到这张表"误当成"逐条地址搞错"去逐一回查 PDF。
+    _STRUCTURAL_GAP_THRESHOLD = 0.8
+    structural_gap_a = compared > 0 and (missing_a / compared) >= _STRUCTURAL_GAP_THRESHOLD
+    structural_gap_b = compared > 0 and (missing_b / compared) >= _STRUCTURAL_GAP_THRESHOLD
 
     def counts(kb: dict[str, Any]) -> dict[str, int]:
         return {
@@ -113,9 +128,12 @@ def compare_kbs(a: dict[str, Any], b: dict[str, Any], label_a: str, label_b: str
             "jaccard": (len(both) / len(set_a | set_b)) if (set_a or set_b) else 1.0,
         },
         "addresses": {
-            "compared_in_intersection": len(both),
+            "compared_in_intersection": compared,
             "agree": addr_agree,
-            "disagree_examples": addr_disagree[:20],
+            "mismatch_count": len(addr_mismatch),
+            "mismatch_examples": addr_mismatch[:20],
+            "missing_count": {label_a: missing_a, label_b: missing_b},
+            "structural_gap": {label_a: structural_gap_a, label_b: structural_gap_b},
         },
         "bit_fields": {
             "mean_jaccard_on_shared_registers": (
@@ -130,9 +148,17 @@ def compare_kbs(a: dict[str, Any], b: dict[str, Any], label_a: str, label_b: str
         report["hints"].append(
             "寄存器集合重叠偏低：先对两侧跑 audit_source / validate_kb，检查表头别名与寄存器 regex。"
         )
-    if addr_disagree:
+    if structural_gap_a or structural_gap_b:
+        gapped = label_a if structural_gap_a else label_b
         report["hints"].append(
-            "共享寄存器地址不一致：人工抽查汇总表 OCR/列映射；确认 summary 表被正确分类。"
+            f"[{gapped}] 侧几乎所有共享寄存器地址都是空的（结构性缺失，非逐条比对结果）："
+            f"大概率是该侧汇总表没被分类成 summary（表头别名/OCR 断行），"
+            f"先用 audit_source 看该侧 table_types 里 summary 数量是否异常，"
+            "不代表另一侧地址就是对的。"
+        )
+    if addr_mismatch:
+        report["hints"].append(
+            "共享寄存器地址不一致（两侧都抽到了值）：人工抽查汇总表 OCR/列映射，回 PDF 核对具体寄存器。"
         )
     mean_f = report["bit_fields"]["mean_jaccard_on_shared_registers"]
     if mean_f is not None and mean_f < 0.8:
@@ -157,8 +183,10 @@ def _print_report(report: dict[str, Any]) -> None:
     print("\n=== addresses (shared regs) ===")
     addr = report["addresses"]
     print(f"  agree={addr['agree']} / {addr['compared_in_intersection']}")
-    for ex in addr["disagree_examples"][:5]:
-        print(f"  disagree: {ex}")
+    print(f"  mismatch(both sides have a value but differ)={addr['mismatch_count']}")
+    print(f"  missing_count={addr['missing_count']}  structural_gap={addr['structural_gap']}")
+    for ex in addr["mismatch_examples"][:5]:
+        print(f"  mismatch: {ex}")
     print("\n=== bit_fields ===")
     mean = report["bit_fields"]["mean_jaccard_on_shared_registers"]
     print(f"  mean_jaccard={mean if mean is None else f'{mean:.2%}'}")
