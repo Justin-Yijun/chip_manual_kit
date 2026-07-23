@@ -28,7 +28,20 @@ python scripts/build_kb.py --mineru-out OUT_DIR1 OUT_DIR2 ... --embed-model /pat
 # 或用薄封装：scripts/build.ps1（Windows）/ scripts/build.sh（Linux/macOS）
 ```
 
-可选对照：`extract/docling_to_kb.py` + `extract/compare_backends.py`。  
+> **强烈建议**每次建库都带上 `--verify-with-docling`：主库建完后自动用 Docling 重新解析原始 PDF、
+> 与主库同模块切片对照，打印+落盘分歧报告（`data/docling_compare_<MODULE>.json`）。
+> **不会自动合并/覆盖主库**，只是把"MinerU 有没有漏挂/错抽寄存器"这件事从"记得手动跑" 变成"默认就会跑"：
+>
+> ```bash
+> python scripts/build_kb.py --mineru-out OUT_DIR --embed-model /path/to/bge-small-en-v1.5 \
+>   --verify-with-docling manual.pdf
+> # 多模块/模块名与文件名不一致时，用 MODULE=path 显式指定，可传多个
+> python scripts/build_kb.py --mineru-out OUT1 OUT2 --verify-with-docling ACME=acme.pdf FOO=foo.pdf
+> ```
+>
+> 没装 `docling`（`pip install docling`，可选依赖）时会打印提示并跳过，**不影响主库构建**，
+> 但整体退出码会是 `3`（主库已建好，校验未完成），适合在脚本/CI 里区分"建库失败" vs "建库成功但没做交叉校验"。
+
 **用户指南（MinerU 默认 + Docling 校验、手册增量/换版）**：[`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)。  
 厂商 golden-slice 适配：[`docs/ADAPTING_AND_TESTING.md`](docs/ADAPTING_AND_TESTING.md)。  
 检索融合默认 RRF；A/B 可设 `CHIP_FUSION=relative_score`。
@@ -39,6 +52,7 @@ python scripts/build_kb.py --mineru-out OUT_DIR1 OUT_DIR2 ... --embed-model /pat
 | `extract/mineru_to_kb.py` | MinerU 输出 → `knowledge.json`（推荐，含公式/枚举/算法/图） |
 | `extract/docling_to_kb.py` | 可选 Docling → 同形 content_list / knowledge.json（对照用） |
 | `extract/compare_backends.py` | 对比两条后端的寄存器/地址/位域重叠 |
+| `scripts/build_kb.py --verify-with-docling` | 建主库后自动跑上面两步并打印分歧报告（不覆盖主库） |
 | `extract/pdf_to_json.py` | 旧版 pdfplumber 抽取（仅寄存器/位域，无公式，作对照/降级） |
 | `server/chip_server.py` | FastMCP server，工具 `search_registers` / `search_concepts` |
 | `skill/chip-manual-kit/` | 可移植 Agent Skill（`SKILL.md` + `query_kb.py` CLI 兜底） |

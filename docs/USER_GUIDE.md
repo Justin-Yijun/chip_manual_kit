@@ -39,11 +39,26 @@ MCP / CLI 只消费 **`data/knowledge.json` + `data/vectors/`**（或你通过 `
 
 ## 3. 用 Docling 做校验（不替换默认）
 
-在**同一份 PDF（建议先 golden slice，再全本）**上另建对照库：
+**推荐做法：直接在 `build_kb.py` 上加 `--verify-with-docling`，一条命令自动做完，不用记两条命令。**
 
 ```bash
 pip install docling   # 可选依赖；受限网络可设 HF_ENDPOINT 镜像
 
+python scripts/build_kb.py --mineru-out out_MODULE --profile my-vendor-profile.json \
+  --verify-with-docling MODULE.pdf
+# 模块名默认取 PDF 文件名（不含扩展名）；不一致或多模块时用 MODULE=path 显式指定，可传多个：
+#   --verify-with-docling ACME=acme.pdf FOO=foo.pdf
+```
+
+主库建完后会自动：用 Docling 重新解析 `MODULE.pdf` → 与主库里同 `module` 的切片对照
+（不会把其它模块的寄存器算进来误报）→ 打印分歧报告 → 落盘到
+`data/docling_compare_MODULE.json`。**全程不修改/不覆盖 `data/knowledge.json`。**
+没装 `docling` 时会跳过并打印提示，主库仍正常生成，但整体退出码是 `3`（区分"建库失败"和
+"建库成功但没做交叉校验"，方便脚本/CI 判断）。
+
+如果想分两步手动跑（比如只想先跑 Docling 侧、还没准备好主库），仍然可以：
+
+```bash
 python extract/docling_to_kb.py --pdf MODULE.pdf --module ACME \
   --out-dir out_docling_MODULE \
   --output data/kb_docling_MODULE.json \
@@ -159,10 +174,11 @@ flowchart TD
 | 目的 | 命令 |
 |---|---|
 | 一键主库 | `python scripts/build_kb.py --mineru-out ...` |
+| 一键主库 + Docling 交叉校验（推荐） | `python scripts/build_kb.py --mineru-out ... --verify-with-docling MODULE.pdf` |
 | 源审计 | `python extract/audit_source.py --input ...` |
 | 主库校验 | `python extract/validate_kb.py --kb data/knowledge.json` |
-| Docling 对照 | `python extract/docling_to_kb.py --pdf ... --module ...` |
-| 后端差分 | `python extract/compare_backends.py --a ... --b ...` |
+| Docling 对照（手动分步） | `python extract/docling_to_kb.py --pdf ... --module ...` |
+| 后端差分（手动分步） | `python extract/compare_backends.py --a ... --b ...` |
 | 检索评测 | `python eval/run_eval.py --questions ...` |
 
 更细的厂商适配与四层测试：[`ADAPTING_AND_TESTING.md`](ADAPTING_AND_TESTING.md)。
