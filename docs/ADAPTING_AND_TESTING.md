@@ -145,6 +145,10 @@ python eval/run_eval.py \
 - BM25、hybrid_rrf、hybrid_relative、hybrid_rerank 分开记录，避免换算法后悄悄回退。
 - 融合 A/B：默认 `CHIP_FUSION=rrf`；对照可设 `CHIP_FUSION=relative_score`
   （权重 `CHIP_FUSION_DENSE_WEIGHT` / `CHIP_FUSION_BM25_WEIGHT`，默认各 0.5）。
+- Top-rank bonus A/B（默认关闭，`eval/run_eval.py` 里的 `hybrid_rrf_bonus` 配置）：
+  `CHIP_FUSION_BONUS_RANK1` / `CHIP_FUSION_BONUS_RANK2_3`，给"任一路排第 1/第 2-3"
+  的候选加固定分，防止精确命中（如标识符）被"两路都还行"的候选融合稀释。确认
+  在你的 gold 题上确实提升 hit@1/hit@5 后才建议设为生产默认值。
 
 题目少时结果只算 smoke test；每个模块至少 5 题、总量 30+ 才适合比较算法。
 

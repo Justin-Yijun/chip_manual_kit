@@ -275,6 +275,8 @@ def search_prose(query: str, module: str = "", top_k: int = 5, rerank: bool = Tr
 
     融合策略由环境变量 CHIP_FUSION 控制：rrf（默认）或 relative_score；
     relative_score 权重见 CHIP_FUSION_DENSE_WEIGHT / CHIP_FUSION_BM25_WEIGHT。
+    可选 top-rank bonus（默认关闭）：CHIP_FUSION_BONUS_RANK1 / CHIP_FUSION_BONUS_RANK2_3，
+    防止某一路精确命中（如标识符）在融合时被"两路都还行"的候选稀释掉。
 
     Args:
         query: 自然语言查询（英文优先，手册为英文）。

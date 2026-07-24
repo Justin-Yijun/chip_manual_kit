@@ -17,7 +17,10 @@
 额外带 "keyword" 字段，模拟这一步提炼后的调用参数；"query" 仍保留原始自然语言，
 供人读、也供 prose 类题目直接使用（prose 走语义/词法混合检索，能吃自然语言）。
                   bm25              : 只用 BM25（use_dense=False, rerank=False）
-                  hybrid_rrf        : BM25 + dense，RRF 融合（rerank=False）
+    hybrid_rrf        : BM25 + dense，RRF 融合（rerank=False）
+                  hybrid_rrf_bonus  : 在 hybrid_rrf 基础上加 top-rank bonus（rank1=+0.05,
+                                      rank2-3=+0.02，借鉴 qmd；生产默认关闭，这里只是
+                                      A/B 对照，不代表已改默认值）
                   hybrid_relative   : BM25 + dense，relative_score 融合（rerank=False）
                   hybrid_rerank     : 在 hybrid_rrf 基础上加 cross-encoder 重排（需配置
                                       CHIP_RERANK_MODEL，否则该配置自动跳过并提示）
@@ -165,6 +168,8 @@ def main(argv: list[str] | None = None) -> int:
     configs = [
         ("bm25", {"use_dense": False, "rerank": False, "fusion": "rrf"}),
         ("hybrid_rrf", {"use_dense": True, "rerank": False, "fusion": "rrf"}),
+        ("hybrid_rrf_bonus", {"use_dense": True, "rerank": False, "fusion": "rrf",
+                               "bonus_rank1": 0.05, "bonus_rank2_3": 0.02}),
         ("hybrid_relative", {"use_dense": True, "rerank": False, "fusion": "relative_score"}),
         ("hybrid_rerank", {"use_dense": True, "rerank": True, "fusion": "rrf"}),
     ]

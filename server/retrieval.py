@@ -6,13 +6,19 @@
     * 每路（BM25 / dense）各取 candidate_pool（默认 30）。
     * 默认 Reciprocal Rank Fusion（RRF, k=60）把两路排名融合成一个候选序。
     * 可选 relative_score：按各路相对最高分归一后加权求和（LlamaIndex 风格 A/B）。
+    * 可选 top-rank bonus：只要某文档在任一路排第 1 / 第 2-3，就加一次固定分数
+      （借鉴开源项目 qmd 的 RRF 设计），防止多路融合把某一路的精确命中稀释掉——
+      比如 BM25 完整命中标识符排第一，但 dense 语义泛化把它压到第 8，融合后被
+      "两路都还行"的候选反超。默认关闭（两个 bonus 值都是 0），需显式开启。
     * 可选：用本地 CPU 的 cross-encoder（bge-reranker-base）对候选精排。
     * **只返回 top_k（默认 5）**，融合/重排全在服务端完成，不把几十条粗召回塞回上下文。
 
 环境变量：
-    CHIP_FUSION=rrf|relative_score     默认 rrf
-    CHIP_FUSION_DENSE_WEIGHT=0.5       relative_score 时 dense 权重
-    CHIP_FUSION_BM25_WEIGHT=0.5        relative_score 时 BM25 权重
+    CHIP_FUSION=rrf|relative_score        默认 rrf
+    CHIP_FUSION_DENSE_WEIGHT=0.5          relative_score 时 dense 权重
+    CHIP_FUSION_BM25_WEIGHT=0.5           relative_score 时 BM25 权重
+    CHIP_FUSION_BONUS_RANK1=0             任一路排第 1 的 bonus，默认 0（关闭）
+    CHIP_FUSION_BONUS_RANK2_3=0           任一路排第 2-3 的 bonus，默认 0（关闭）
 
 全部惰性加载并优雅降级：
     * 缺 numpy/sentence-transformers 或缺 embeddings → 退化为纯 BM25。
@@ -218,31 +224,70 @@ class HybridIndex:
 
     # -- 融合 + 重排 -------------------------------------------------------
     @staticmethod
-    def _rrf(*rankings: list[tuple[int, float]]) -> dict[int, float]:
+    def _apply_rank_bonus(
+        fused: dict[int, float],
+        best_rank: dict[int, int],
+        bonus_rank1: float,
+        bonus_rank2_3: float,
+    ) -> None:
+        """按"任一路最佳名次"给 fused 原地加 bonus（不按命中路数叠加，只加一次）。
+
+        用于 _rrf / _relative_score 共享——两者语义一致：见调用方 docstring。
+        """
+        if not bonus_rank1 and not bonus_rank2_3:
+            return
+        for idx, rank in best_rank.items():
+            if idx not in fused:
+                continue
+            if rank == 0:
+                fused[idx] += bonus_rank1
+            elif rank in (1, 2):
+                fused[idx] += bonus_rank2_3
+
+    @staticmethod
+    def _rrf(
+        *rankings: list[tuple[int, float]],
+        bonus_rank1: float = 0.0,
+        bonus_rank2_3: float = 0.0,
+    ) -> dict[int, float]:
+        """Reciprocal Rank Fusion（k=60），可选 top-rank bonus（默认关闭，见模块文档）。"""
         fused: dict[int, float] = {}
+        best_rank: dict[int, int] = {}
         for ranking in rankings:
             for rank, (idx, _score) in enumerate(ranking):
                 fused[idx] = fused.get(idx, 0.0) + 1.0 / (_RRF_K + rank + 1)
+                if idx not in best_rank or rank < best_rank[idx]:
+                    best_rank[idx] = rank
+        HybridIndex._apply_rank_bonus(fused, best_rank, bonus_rank1, bonus_rank2_3)
         return fused
 
     @staticmethod
     def _relative_score(
         *rankings: list[tuple[int, float]],
         weights: list[float] | None = None,
+        bonus_rank1: float = 0.0,
+        bonus_rank2_3: float = 0.0,
     ) -> dict[int, float]:
-        """各路分数除以该路最高分后加权求和（LlamaIndex RelativeScoreFusion 风格）。"""
+        """各路分数除以该路最高分后加权求和（LlamaIndex RelativeScoreFusion 风格）。
+
+        可选 top-rank bonus，默认关闭，语义同 _rrf。
+        """
         active = [(r, w) for r, w in zip(rankings, weights or []) if r]
         if weights is None:
             n = sum(1 for r in rankings if r)
             w_each = (1.0 / n) if n else 1.0
             active = [(r, w_each) for r in rankings if r]
         fused: dict[int, float] = {}
+        best_rank: dict[int, int] = {}
         for ranking, weight in active:
             max_s = max(s for _, s in ranking)
             if max_s <= 0:
                 continue
-            for idx, score in ranking:
+            for rank, (idx, score) in enumerate(ranking):
                 fused[idx] = fused.get(idx, 0.0) + weight * (score / max_s)
+                if idx not in best_rank or rank < best_rank[idx]:
+                    best_rank[idx] = rank
+        HybridIndex._apply_rank_bonus(fused, best_rank, bonus_rank1, bonus_rank2_3)
         return fused
 
     @staticmethod
@@ -251,6 +296,24 @@ class HybridIndex:
         if name in ("relative", "relative_score", "rel"):
             return "relative_score"
         return "rrf"
+
+    @staticmethod
+    def _resolve_bonus(
+        bonus_rank1: float | None,
+        bonus_rank2_3: float | None,
+    ) -> tuple[float, float]:
+        """显式参数优先；缺省则读 CHIP_FUSION_BONUS_RANK1/RANK2_3；两者都缺省时为 0（关闭）。"""
+        if bonus_rank1 is None:
+            try:
+                bonus_rank1 = float(os.environ.get("CHIP_FUSION_BONUS_RANK1", "0"))
+            except ValueError:
+                bonus_rank1 = 0.0
+        if bonus_rank2_3 is None:
+            try:
+                bonus_rank2_3 = float(os.environ.get("CHIP_FUSION_BONUS_RANK2_3", "0"))
+            except ValueError:
+                bonus_rank2_3 = 0.0
+        return bonus_rank1, bonus_rank2_3
 
     def search(
         self,
@@ -261,16 +324,22 @@ class HybridIndex:
         rerank: bool = True,
         use_dense: bool = True,
         fusion: str | None = None,
+        bonus_rank1: float | None = None,
+        bonus_rank2_3: float | None = None,
     ) -> tuple[list[dict[str, Any]], str]:
         """use_dense=False 时强制只用 BM25（供评测对比 A/B，不需要另建索引）。
 
         fusion: rrf（默认）| relative_score；None 时读 CHIP_FUSION。
+        bonus_rank1/bonus_rank2_3: top-rank bonus，None 时读
+        CHIP_FUSION_BONUS_RANK1/CHIP_FUSION_BONUS_RANK2_3（默认均 0，即关闭，
+        不改变现有默认排序）。
         """
         self._load()
         if not self._chunks:
             return [], self._note
         module_lc = module.strip().lower()
         fusion_mode = self._resolve_fusion(fusion)
+        b1, b23 = self._resolve_bonus(bonus_rank1, bonus_rank2_3)
 
         dense = self._dense_top(query, pool) if use_dense else []
         lexical = self._bm25_top(query, pool)
@@ -280,10 +349,11 @@ class HybridIndex:
                 w_bm25 = float(os.environ.get("CHIP_FUSION_BM25_WEIGHT", "0.5"))
             except ValueError:
                 w_dense, w_bm25 = 0.5, 0.5
-            fused = self._relative_score(dense, lexical, weights=[w_dense, w_bm25])
+            fused = self._relative_score(dense, lexical, weights=[w_dense, w_bm25],
+                                          bonus_rank1=b1, bonus_rank2_3=b23)
             fuse_tag = "relative_score(bm25+dense)"
         else:
-            fused = self._rrf(dense, lexical)
+            fused = self._rrf(dense, lexical, bonus_rank1=b1, bonus_rank2_3=b23)
             fuse_tag = "rrf(bm25+dense)"
         if not fused:
             return [], self._note or "无匹配结果。"
@@ -305,6 +375,8 @@ class HybridIndex:
             return [], "该模块下无匹配结果，可去掉 module 再试。"
 
         method = fuse_tag if (self._dense_ok and use_dense and dense) else "bm25"
+        if method != "bm25" and (b1 or b23):
+            method += "+bonus"  # 提示这次融合分数里含 top-rank bonus，便于评测/调试对照
         reranker = self._ensure_reranker() if rerank else None
         if reranker is not None and len(cand) > 1:
             pairs = [(query, self._chunks[i].get("text", "")) for i, _ in cand]
