@@ -53,7 +53,6 @@ python scripts/build_kb.py --mineru-out OUT_DIR1 OUT_DIR2 ... --embed-model /pat
 | `extract/docling_to_kb.py` | 可选 Docling → 同形 content_list / knowledge.json（对照用） |
 | `extract/compare_backends.py` | 对比两条后端的寄存器/地址/位域重叠 |
 | `scripts/build_kb.py --verify-with-docling` | 建主库后自动跑上面两步并打印分歧报告（不覆盖主库） |
-| `extract/pdf_to_json.py` | 旧版 pdfplumber 抽取（仅寄存器/位域，无公式，作对照/降级） |
 | `server/chip_server.py` | FastMCP server，工具 `search_registers` / `search_concepts` |
 | `skill/chip-manual-kit/` | 可移植 Agent Skill（`SKILL.md` + `query_kb.py` CLI 兜底） |
 | `data/knowledge.json` | 生成的知识库（手册派生物，默认 `.gitignore`） |
